@@ -148,7 +148,7 @@ class CharLSTM(nn.Module):
         self.W_ih = nn.Parameter(torch.empty(4 * hidden_dim, input_dim))
 
         # 隐状态到门的权重
-        self.W_hh = nn.Parameter(torch.empty(4 * hidden_dim, input_dim))
+        self.W_hh = nn.Parameter(torch.empty(4 * hidden_dim, hidden_dim))
 
         # 两个偏置
         self.b_ih = nn.Parameter(torch.empty(4 * hidden_dim))
