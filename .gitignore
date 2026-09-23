@@ -1,0 +1,24 @@
+# 数据集，太大，不提交
+chinese-poetry/
+
+# 模型权重
+*.pth
+*.pt
+*.ckpt
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+
+# 虚拟环境
+venv/
+env/
+.venv/
+
+# IDE 配置
+.vscode/
+.idea/
+
+# 日志和临时文件
+*.log
+*.tmp
