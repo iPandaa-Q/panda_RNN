@@ -8,7 +8,7 @@ from collections import Counter
 import re
 
 # 数据准备
-JSON_DIR = "./chinese-poetry/御定全唐詩/json"
+JSON_DIR = "./chinese-poetry/全唐诗"
 
 def is_regular_poem(text):
     """
@@ -22,12 +22,13 @@ def is_regular_poem(text):
     lengths = [len(s) for s in sentences]  # 取长度，后续筛选
     return all(l == 5 for l in lengths) or all(l == 7 for l in lengths)
 
-def load_poems(json_dir, max_poems=100000):
+def load_poems(json_dir, max_poems=200000):
     poems = []
     if not os.path.exists(json_dir):
         return poems
 
-    files = sorted([f for f in os.listdir(json_dir) if f.endswith(".json")])
+    files = sorted([f for f in os.listdir(json_dir)
+                     if f.startswith("poet") and f.endswith(".json")])
 
     for fname in files:
         filepath = os.path.join(json_dir, fname)
@@ -67,6 +68,7 @@ def load_poems(json_dir, max_poems=100000):
                 return poems
     return poems
 poems = load_poems(JSON_DIR, )
+print(f"加载了 {len(poems)} 首五言/七言诗")
 
 # 创建词表，模型可以预测的所有类别
 all_text = "".join(poems)
@@ -74,12 +76,19 @@ all_text = "".join(poems)
 # 统计所有字符出现次数
 counter = Counter(all_text)
 
+PUNCTUATIONS = ["，", "。", "？", "！", "、", "；", "："]
 # 只保留出现次数 >= MIN_FREQ 的字符
-MIN_FREQ = 50
+MIN_FREQ = 200
 chars = sorted([c for c, cnt in counter.items() if cnt >= MIN_FREQ])
+
 # 只会保留最常用的 3000 个汉字
 MAX_VOCAB = 3000
 chars = chars[:MAX_VOCAB]
+
+# 强制加入标点
+for p in PUNCTUATIONS:
+    if p not in chars:
+        chars.append(p)
 
 PAD_TOKEN = "<PAD>"  # 填充符
 SOP_TOKEN = "<SOP>"  # 开始位置
@@ -101,7 +110,7 @@ EOP_IDX = char2idx[EOP_TOKEN]
 UNK_IDX = char2idx[UNK_TOKEN]
 
 class PoetryDataset(Dataset):
-    def __init__(self, poems, char2idx, fixed_len=64):
+    def __init__(self, poems, char2idx, fixed_len=128):
         self.fixed_len = fixed_len
         self.samples = []
         for poem in poems:
@@ -133,12 +142,12 @@ class PoetryDataset(Dataset):
     def __getitem__(self, idx):
         return self.samples[idx]
 
-FIXED_LEN = 64
+FIXED_LEN = 64  # 填充长度
 dataset = PoetryDataset(poems, char2idx, fixed_len=FIXED_LEN)
-loader = DataLoader(dataset, batch_size=128, shuffle=True)
+loader = DataLoader(dataset, batch_size=256, shuffle=True)
 
 class CharLSTM(nn.Module):
-    def __init__(self, vocab_size, embed_dim=512, hidden_dim=512, num_layers=2, dropout=0.2):
+    def __init__(self, vocab_size, embed_dim=1024, hidden_dim=1024, num_layers=3, dropout=0.2):
         super().__init__()
         assert embed_dim == hidden_dim, "权重绑定需要 embed_dim == hidden_dim"
 
@@ -186,7 +195,7 @@ model = CharLSTM(vocab_size).to(device)
 
 criterion = nn.CrossEntropyLoss(ignore_index=PAD_IDX, label_smoothing=0.1)  # 加了一个标签平滑
 
-optimizer = optim.Adam(model.parameters(), lr=0.001)
+optimizer = optim.Adam(model.parameters(), lr=0.002)  # 学习率
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)  # 依旧学习率衰减
 
 
@@ -247,7 +256,7 @@ torch.save(model.state_dict(), "poem_lstm.pth")
 Top-K+重复惩罚+屏蔽UNK
 """
 
-def generate(model, start_char, length=50, temperature=1.5,
+def generate(model, start_char, length=80, temperature=1.5,
              top_k=10, repetition_penalty=1.5):
     model.eval()
     chars = [start_char]
@@ -287,7 +296,7 @@ def generate(model, start_char, length=50, temperature=1.5,
     return "".join(chars)
 
 print("生成示例：")
-for start in ["<SOP>", "<SOP>", "<SOP>", "<SOP>"]:
-    print(f"以 {start} 开头 ")
+for start in ["<SOP>", "<SOP>", "<SOP>", "<SOP>", "<SOP>", "<SOP>", "<SOP>", "<SOP>", "<SOP>", "<SOP>"]:
+    print(f"以 <SOP> 开头 ")
     print(generate(model, start, length=50, temperature=0.8))
     print()
